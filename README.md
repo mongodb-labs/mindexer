@@ -12,7 +12,7 @@ Please note: This tool is not officially supported or endorsed by MongoDB Inc. T
 
 ## Installation
 
-This tool requires python 3.x and pip installed on your system. To install, run the following command:
+This tool requires python 3.x and pip on your system. To install `mindexer`, run the following command:
 
 ```bash
 pip install mindexer
