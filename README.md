@@ -59,6 +59,8 @@ Once the workload has been collected, you can disable the profiler again as show
 
 With the workload recorded in `system.profile` you can run `mindexer`, providing the MongoDB URI connection string, database and collection name for which to recommend indexes.
 
+**Example**
+
 ```
 mindexer --uri mongodb://my.mongodb.url:27017 --db mydatabase --collection mycollection
 ```
