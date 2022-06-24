@@ -1,8 +1,6 @@
 import unittest
 from unittest.mock import Mock
-import pandas as pd
-import numpy as np
-from mindexer.utils.query import Query, Predicate
+from mindexer.utils.query import Query
 from mindexer.utils.sampling import SampleEstimator
 
 
@@ -15,9 +13,7 @@ class TestSampleEstimator(unittest.TestCase):
         # test a pipeline built with default parameters
         TestSampleEstimator.mongoCollection.count = 100
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
+        query = Query.from_mql({"County": "KINGS", "Model Year": {"$gt": 2010}})
 
         sample_est = SampleEstimator(TestSampleEstimator.mongoCollection)
 
@@ -35,10 +31,7 @@ class TestSampleEstimator(unittest.TestCase):
         # test building a pipeline when given a sample size
         TestSampleEstimator.mongoCollection.count = 10
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
-
+        query = Query.from_mql({"County": "KINGS", "Model Year": {"$gt": 2010}})
         sample_est = SampleEstimator(TestSampleEstimator.mongoCollection, sample_size=3)
 
         pipeline = sample_est.make_pipeline(query)
@@ -56,9 +49,7 @@ class TestSampleEstimator(unittest.TestCase):
         # test building a pipelind when given a sample ratio
         TestSampleEstimator.mongoCollection.count = 100
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
+        query = Query.from_mql({"County": "KINGS", "Model Year": {"$gt": 2010}})
 
         sample_est = SampleEstimator(
             TestSampleEstimator.mongoCollection, sample_ratio=0.5
@@ -79,10 +70,6 @@ class TestSampleEstimator(unittest.TestCase):
         # test that giving a size of 0 returns error
         TestSampleEstimator.mongoCollection.count = 100
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
-
         with self.assertRaises(AssertionError) as err:
             SampleEstimator(TestSampleEstimator.mongoCollection, sample_size=0)
             print(err)
@@ -90,10 +77,6 @@ class TestSampleEstimator(unittest.TestCase):
     def test_pipeline_large(self):
         # test that there is an error if given a sample size larger than collection size
         TestSampleEstimator.mongoCollection.count = 100
-
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
 
         with self.assertRaises(AssertionError) as err:
             SampleEstimator(TestSampleEstimator.mongoCollection, sample_size=1000)
@@ -103,10 +86,6 @@ class TestSampleEstimator(unittest.TestCase):
         # test that giving a very small sample ratio will throw an error
         TestSampleEstimator.mongoCollection.count = 100
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["QUEENS"]))
-        query.add_predicate(Predicate(column="Model Year", op="lt", values=[2016]))
-
         with self.assertRaises(AssertionError) as err:
             SampleEstimator(TestSampleEstimator.mongoCollection, sample_ratio=0.0001)
             print(err)
@@ -115,9 +94,7 @@ class TestSampleEstimator(unittest.TestCase):
         # test building a pipeline with a limit on number of documents
         TestSampleEstimator.mongoCollection.count = 100
 
-        query = Query()
-        query.add_predicate(Predicate(column="County", op="eq", values=["KINGS"]))
-        query.add_predicate(Predicate(column="Model Year", op="gt", values=[2010]))
+        query = Query.from_mql({"County": "KINGS", "Model Year": {"$gt": 2010}})
 
         sample_est = SampleEstimator(
             TestSampleEstimator.mongoCollection, numrows=10, sample_size=3

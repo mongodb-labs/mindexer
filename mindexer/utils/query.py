@@ -1,11 +1,5 @@
 from typing import Tuple
-from .common import OPERATORS
-
-from collections import namedtuple
-import numpy as np
-import pandas as pd
-
-Predicate = namedtuple("Predicate", ["column", "op", "values"])
+from collections import OrderedDict
 
 
 class Query(object):
@@ -18,11 +12,21 @@ class Query(object):
     """
 
     def __init__(self):
-        self.predicates = []
-
+        self._filter = OrderedDict()
         self._limit = None
         self._projection = None
         self._sort = None
+
+    @property
+    def filter(self):
+        """returns the filter for this query."""
+        return self._filter
+
+    @filter.setter
+    def filter(self, f: int):
+        """set a filter for this query. None means no filter = {}."""
+        assert type(f) == dict, "limit must be a dict"
+        self._filter = f
 
     @property
     def limit(self):
@@ -60,35 +64,40 @@ class Query(object):
         """return all fields of the query, whether they are part of the predicates,
         projection or sort.
         """
-        fields = [pred.column for pred in self.predicates]
+        fields = list(self.filter.keys())
         if self.sort:
             fields += list(self.sort)
         if self.projection:
             fields += list(self.projection)
-        return sorted(fields)
+        return sorted(set(fields))
 
     def add_predicate(self, predicate):
         """adds a predicate to the query."""
 
-        assert isinstance(predicate.values, list)
-        assert (
-            predicate.op in OPERATORS.keys()
-        ), f"unsupported operator '${predicate.op}'"
+        assert isinstance(predicate, dict)
 
-        # simplify $in
-        if predicate.op in ["in", "nin"]:
-            assert len(predicate.values) >= 1, "in operator requires at least 1 value"
-            if len(predicate.values) == 1:
-                predicate.op == "eq" if predicate.op == "in" else "neq"
+        # get first (and only) key
+        key = next(iter(predicate))
+        if not key in self.filter:
+            self._filter.update(predicate)
         else:
-            assert len(predicate.values) == 1, "operator takes exactly 1 value"
-
-        self.predicates.append(predicate)
+            # get filter and predicate values
+            fval = self._filter[key]
+            pval = predicate[key]
+            if type(fval) == dict and type(pval) == dict:
+                fval.update(pval)
+            else:
+                raise Exception(
+                    f"Error: can't update {key} field with predicate {predicate}."
+                )
 
     def add_predicates(self, preds):
         """add multiple predicates to a query at once."""
-        for pred in preds:
-            self.add_predicate(pred)
+
+        assert isinstance(preds, dict)
+
+        for k, v in preds.items():
+            self.add_predicate({k: v})
 
     def index_intersect(self, index):
         """returns a copy of this query that only contains predicates on the
@@ -104,15 +113,11 @@ class Query(object):
         query = Query()
 
         for field in index:
-            # reset field indicator
-            query_has_field = False
-            for pred in self.predicates:
-                if pred.column == field:
-                    query_has_field = True
-                    query.add_predicate(pred)
-            # if no predicates found for this field, stop.
-            if not query_has_field:
+            if field in self.filter:
+                query.add_predicate({field: self.filter[field]})
+            else:
                 break
+
         return query
 
     def is_subset(self, index):
@@ -120,7 +125,7 @@ class Query(object):
         This is necessary, but not sufficient to be a covered by the index.
         It is used to determine if a limit caps the cost of the query or not.
         """
-        predicate_fields = set(p.column for p in self.predicates)
+        predicate_fields = set(self.filter.keys())
         return predicate_fields.issubset(set(index))
 
     def is_covered(self, index):
@@ -132,7 +137,7 @@ class Query(object):
         if self.projection is None:
             return False
 
-        predicate_fields = tuple(p.column for p in self.predicates)
+        predicate_fields = tuple(self.filter.keys())
         fields_to_cover = set(predicate_fields + self.projection)
 
         return fields_to_cover.issubset(set(index))
@@ -168,16 +173,24 @@ class Query(object):
                 # sort fields are a sub-sequence of index fields
                 sub_idx = i
 
+        def is_equality_cmp(field):
+            if isinstance(self.filter[field], dict):
+                # if none (= not any) of the keys start with $, then it's an equality comparison
+                return not any(key.startswith("$") for key in self.filter[field].keys())
+            else:
+                # if value is not a dictionary, it's always an equality comp.
+                return True
+
         if sub_idx != -1:
             # check for preceeding equality predicates
-            if all(pred.op == "eq" for pred in self.predicates[:sub_idx]):
+            if all(is_equality_cmp(key) for key in list(self.filter.keys())[:sub_idx]):
                 return True
 
         return False
 
     def __repr__(self):
         s = []
-        s.append(f"filter={self.to_mql()}")
+        s.append(f"filter={self.filter}")
         if self.sort:
             s.append(f"sort={self.sort}")
         if self.limit:
@@ -189,99 +202,17 @@ class Query(object):
     def __len__(self):
         """The length of a query, using 'len(query)', is the number of
         predicates it contains."""
-        return len(self.predicates)
-
-    def to_df_query(self, df):
-        """Converts the query to be used on a Pandas DataFrame."""
-        FUNC_MAP = {"lt": "lt", "lte": "le", "gt": "gt", "gte": "ge", "eq": "eq"}
-        bools = pd.Series([True] * df.shape[0])
-        for pred in self.predicates:
-            fn = FUNC_MAP[pred.op]
-            colname = pred.column.replace("_", " ")
-            newbools = getattr(df[colname], fn)(pred.values[0])
-            bools &= newbools
-        return bools.sum()
+        return len(self.filter.keys())
 
     def to_mql(self):
         """converts the query to MQL syntax."""
-        query = {}
-
-        def clean_value(v):
-            if type(v) == str:
-                return v.strip()
-            elif isinstance(v, np.int64):
-                return v.item()
-            else:
-                return v
-
-        for predicate in self.predicates:
-            name = predicate.column
-            # remove leading/trailing whitespace
-            values = [clean_value(v) for v in predicate.values]
-            if predicate.op == "eq":
-                if pd.isna(values[0]):
-                    # special handling for missing values
-                    query[name] = {"$exists": False}
-                else:
-                    query[name] = values[0]
-            elif predicate.op in ["in", "nin"]:
-                query[name] = {f"${predicate.op}": values}
-            else:
-                if name not in query:
-                    query[name] = {f"${predicate.op}": values[0]}
-                else:
-                    if isinstance(query[name], dict):
-                        query[name][f"${predicate.op}"] = values[0]
-                    else:
-                        query[name] = {
-                            "$eq": query[name],
-                            f"${predicate.op}": values[0],
-                        }
-        return query
+        return self.filter
 
     @classmethod
     def from_mql(cls, query):
         """converts MQL syntax to a Query object."""
         q = cls()
-
-        if not query:
-            return q
-
-        for col, value in query.items():
-            if col.startswith("$"):
-                raise AssertionError(f"unsupported operator '{col}'")
-            if isinstance(value, (str, int)):
-                q.add_predicate(Predicate(column=col, op="eq", values=[value]))
-            elif isinstance(value, dict):
-                ops = value.keys()
-                for item in ops:
-                    if item in ["$in", "$nin"]:
-                        q.add_predicate(
-                            Predicate(
-                                column=col, op=item.lstrip("$"), values=value[item]
-                            )
-                        )
-                    elif item == "$exists" and not value[item]:
-                        # special handling for missing values
-                        q.add_predicate(Predicate(column=col, op="eq", values=[None]))
-                    else:
-                        q.add_predicate(
-                            Predicate(
-                                column=col, op=item.lstrip("$"), values=[value[item]]
-                            )
-                        )
+        if query:
+            q.filter = query
 
         return q
-
-
-if __name__ == "__main__":
-
-    # Example Usage of a Query objet
-    query = Query()
-
-    query.add_predicates(
-        [
-            Predicate("Suspension_Indicator", "eq", ["Y"]),
-            Predicate("Make", "in", ["INFIN", "HYUND"]),
-        ]
-    )

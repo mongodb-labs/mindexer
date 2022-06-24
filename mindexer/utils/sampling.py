@@ -1,7 +1,30 @@
-from .common import map_bson, QueryRegionEmptyException
 import math
-
 import pandas as pd
+
+from bson.timestamp import Timestamp
+from bson.int64 import Int64
+from bson.decimal128 import Decimal128
+
+from datetime import datetime
+
+
+def map_bson(b):
+    if isinstance(b, (bool, int, float, str, datetime)):
+        return b
+    elif isinstance(b, Timestamp):
+        return b.as_datetime()
+    elif isinstance(b, Int64):
+        return int(str(b))
+    elif isinstance(b, Decimal128):
+        return b.to_decimal()
+    elif isinstance(b, list):
+        raise TypeError("We don't know how to map arrays, yet")
+    return str(b)
+
+
+class QueryRegionEmptyException(Exception):
+    pass
+
 
 SAMPLE_DB_NAME = "samples"
 

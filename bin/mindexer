@@ -3,7 +3,6 @@
 from mindexer.utils.sampling import SampleEstimator
 from mindexer.utils.mongodb import MongoCollection
 from mindexer.utils.query import Query
-from mindexer.utils.workload import Workload
 
 from itertools import permutations
 import pandas as pd
@@ -40,7 +39,7 @@ def main(
     ]
 
     # extract MQL queries
-    workload = Workload()
+    workload = []
 
     for doc in profile_docs:
         try:
@@ -58,7 +57,8 @@ def main(
 
     print(f"\n>> found {len(workload)} queries for namespace {namespace}\n")
     if verbose:
-        workload.print()
+        for i, query in enumerate(workload):
+            print(f"{i:>4} {query}")
 
     # -- Sample Estimator
 
