@@ -73,6 +73,7 @@ def main(
 
     # -- Sample Estimator
 
+    assert sample_db != db, "Sample database cannot be the same as original database."
     if mcollection.count * sample_ratio <= MIN_SAMPLE_SIZE:
         estimator = SampleEstimator(
             mcollection,
