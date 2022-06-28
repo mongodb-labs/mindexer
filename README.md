@@ -84,7 +84,7 @@ The following features are not yet supported:
 - Disjunctions in queries (`$or`, `$nor`) or multiply nested `$and` conjunctions (top-level `$and` is supported)
 - Aggregation pipelines via the `aggregate` command
 - More advanced query operators like `$text`
-- Compound index sort order is currently not considered, all fields are sorted in ascending (1) order
+- Compound index mixed sort order is currently not considered, all fields are sorted in ascending (1) order
 - Anything not explicitly mentioned as supported above
 
 ## Tests
