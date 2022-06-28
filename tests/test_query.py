@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-from mindexer.utils.query import Query
+from mindexer.utils.query import Query, validate_recursive
 
 
 class TestQuery(unittest.TestCase):
@@ -57,7 +57,7 @@ class TestQuery(unittest.TestCase):
         def fn():
             query.add_predicate({"foo": {"$lt": 20}})
 
-        self.assertRaisesRegexp(Exception, "can't update foo", fn)
+        self.assertRaisesRegex(Exception, "can't update foo", fn)
 
     def test_add_predicates(self):
         query = Query.from_mql({"foo": {"$gt": 5}})
@@ -184,6 +184,67 @@ class TestQuery(unittest.TestCase):
             ("State", "Unladen Weight", "Foo Field", "Make")
         )
         self.assertEqual(intersected.fields, ["State", "Unladen Weight"])
+
+    def test_query_with_id(self):
+        query = Query.from_mql(
+            {
+                "_id": "62b50910",
+                "tenantId": "4be48469",
+                "$comment": "62b55590c",
+            }
+        )
+        self.assertEqual(query.fields, ["_id", "tenantId"])
+
+    def test_validation_pass(self):
+        Query.from_mql({"_id": 1, "foo": {"$gt": 20, "$lte": 30}, "bar": True})
+
+    def test_validation_or_0(self):
+        def fn():
+            Query.from_mql({"$or": [{"_id": 1}, {"foo": {"$gt": 20, "$lte": 30}}]})
+
+        self.assertRaisesRegex(
+            NotImplementedError, "queries with \$or not supported", fn
+        )
+
+    def test_validation_and_0(self):
+        query = Query.from_mql({"$and": [{"_id": 1}, {"foo": {"$gt": 20, "$lte": 30}}]})
+        # flatten into implicit $and query
+        self.assertEqual(query.filter, {"_id": 1, "foo": {"$gt": 20, "$lte": 30}})
+
+    def test_validation_and_explicit_to_implicit(self):
+        query = Query.from_mql({"$and": [{"foo": {"$gt": 20}}, {"foo": {"$lte": 30}}]})
+        # flatten into implicit $and query
+        self.assertEqual(query.filter, {"foo": {"$gt": 20, "$lte": 30}})
+
+    def test_validation_and_1(self):
+        def fn():
+            Query.from_mql(
+                {
+                    "$and": [
+                        {"$and": [{"foo": 1}, {"bar": 1}]},
+                        {"foo": {"$gt": 20, "$lte": 30}},
+                    ]
+                }
+            )
+
+        self.assertRaisesRegex(
+            NotImplementedError, "\$and is only supported at the top level", fn
+        )
+
+    def test_validation_or_1(self):
+        def fn():
+            Query.from_mql(
+                {
+                    "$and": [
+                        {"$or": [{"foo": 1}, {"bar": 1}]},
+                        {"foo": {"$gt": 20, "$lte": 30}},
+                    ]
+                }
+            )
+
+        self.assertRaisesRegex(
+            NotImplementedError, "queries with \$or not supported", fn
+        )
 
 
 if __name__ == "__main__":

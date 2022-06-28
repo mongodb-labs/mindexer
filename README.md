@@ -77,11 +77,20 @@ The final output is a list of indexes that `mindexer` determined to be beneficia
 
 `mindexer` is an early prototype and does not support the full MongoDB query language yet.
 
-`mindexer` supports _find_ queries over one or more predicates (fields) with the following query operators: equality (via simple key/value pairs, e.g. `{foo: "bar"}`), ranges (`$gt`, `$gte`, `$lt`, `$lte`), `$in`, `$exists`, and negations `$ne` and `$nin`. Also supported are projections, sorts and limits.
+`mindexer` supports _find_ queries over one or more predicates (fields) with the following query operators: equality (via simple key/value pairs, e.g. `{foo: "bar"}`), ranges (`$gt`, `$gte`, `$lt`, `$lte`), `$in`, `$exists`, `$regex`, `$size` and negations `$ne` and `$nin`. Also supported are projections, sorts and limits.
 
 The following features are not yet supported:
 
-- Explicit conjunctions (`$and`) and disjunctions (`$or`, `$nor`)
+- Disjunctions in queries (`$or`, `$nor`) or multiply nested `$and` conjunctions (top-level `$and` is supported)
 - Aggregation pipelines via the `aggregate` command
-- More advanced query operators like `$regex`, `$size`, ...
+- More advanced query operators like `$text`
+- Compound index sort order is currently not considered, all fields are sorted in ascending (1) order
 - Anything not explicitly mentioned as supported above
+
+## Tests
+
+To execute the unit tests, run from the top-level directory:
+
+```
+python -m unittest discover ./tests
+```

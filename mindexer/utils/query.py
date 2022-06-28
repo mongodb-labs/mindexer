@@ -1,5 +1,21 @@
 from typing import Tuple
 from collections import OrderedDict
+from bson import Int64
+
+
+def validate_recursive(obj, val_fn, depth=0):
+    """runs the validation function val_fn(key, val, depth) recursively
+    on keys and values, throws if the query is not supported."""
+
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            val_fn(k, None, depth)
+            validate_recursive(v, val_fn, depth + 1)
+    elif isinstance(obj, list):
+        all(validate_recursive(el, val_fn, depth) for el in obj)
+    else:
+        val_fn(None, obj, depth)
+    return True
 
 
 class Query(object):
@@ -17,6 +33,9 @@ class Query(object):
         self._projection = None
         self._sort = None
 
+    def _is_filter_supported(self, f):
+        """returns whether the filter is supported in this version of mindexer."""
+
     @property
     def filter(self):
         """returns the filter for this query."""
@@ -26,6 +45,28 @@ class Query(object):
     def filter(self, f: int):
         """set a filter for this query. None means no filter = {}."""
         assert type(f) == dict, "limit must be a dict"
+
+        # validation for filter object
+        def val_fn(k, v, d):
+            if k == "$and" and d > 0:
+                raise NotImplementedError("$and is only supported at the top level")
+            if k in ["$nor", "$or", "$text"]:
+                raise NotImplementedError(f"queries with {k} not supported.")
+
+        # this throws if validation fails
+        validate_recursive(f, val_fn)
+
+        # filter out $comment fields
+        f = {k: v for k, v in f.items() if k != "$comment"}
+
+        # flatten top-level $and to implicit syntax
+        if "$and" in f:
+            temp_q = Query()
+            for el in f["$and"]:
+                temp_q.add_predicate(el)
+                self._filter = temp_q.filter
+            return
+
         self._filter = f
 
     @property
@@ -36,7 +77,7 @@ class Query(object):
     @limit.setter
     def limit(self, n: int):
         """set a limit for this query. None means no limit."""
-        assert type(n) == int, "limit must be an integer"
+        assert isinstance(n, (int, Int64)), f"limit must be an integer, is {type(n)}"
         self._limit = n
 
     @property

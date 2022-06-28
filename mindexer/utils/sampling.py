@@ -74,7 +74,7 @@ class SampleEstimator:
             self.sample_size = None  # Remove the sample stage if it's equal to the size of the collection and do not persist
             self.persist = False
 
-        if persist:
+        if self.persist:
             # create and save a sample collection in the samples database with sample_size = self.sample_size
             pipeline = [
                 {"$sample": {"size": self.sample_size}},
