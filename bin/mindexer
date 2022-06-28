@@ -3,18 +3,22 @@
 from mindexer.utils.sampling import SampleEstimator
 from mindexer.utils.mongodb import MongoCollection
 from mindexer.utils.query import Query
-from mindexer.utils.workload import Workload
 
 from itertools import permutations
 import pandas as pd
 import numpy as np
 
+import sys
 import time
 import argparse
+
+# TODO: Figure out why line 210 causes this warning and how we can prevent it
+np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 SYSTEM_PROFILE = "system.profile"
 DEFAULT_SAMPLE_DB = "mindexer_samples"
 DEFAULT_SAMPLE_RATIO = 0.001
+MIN_SAMPLE_SIZE = 1000
 MAX_INDEX_FIELDS = 3
 IXSCAN_COST = 0.5
 FETCH_COST = 10
@@ -22,7 +26,13 @@ SORT_COST = 10
 
 
 def main(
-    uri, db, collection, sample_ratio=0.001, sample_db=DEFAULT_SAMPLE_DB, verbose=False
+    uri,
+    db,
+    collection,
+    sample_ratio=0.001,
+    sample_db=DEFAULT_SAMPLE_DB,
+    verbose=False,
+    before_and_after=False,
 ):
     namespace = f"{db}.{collection}"
     mcollection = MongoCollection(uri, db, collection)
@@ -40,7 +50,7 @@ def main(
     ]
 
     # extract MQL queries
-    workload = Workload()
+    workload = []
 
     for doc in profile_docs:
         try:
@@ -52,22 +62,32 @@ def main(
             if "projection" in doc:
                 query.projection = tuple(doc["projection"].keys())
 
-            workload.queries.append(query)
-        except AssertionError as e:
+            workload.append(query)
+        except Exception as e:
             print(f"    Warning: skipping query {doc['filter']}. {e}")
 
     print(f"\n>> found {len(workload)} queries for namespace {namespace}\n")
     if verbose:
-        workload.print()
+        for i, query in enumerate(workload):
+            print(f"{i:>4} {query}")
 
     # -- Sample Estimator
 
-    estimator = SampleEstimator(
-        mcollection,
-        sample_ratio=sample_ratio,
-        sample_db_name=sample_db,
-        persist=True,
-    )
+    assert sample_db != db, "Sample database cannot be the same as original database."
+    if mcollection.count * sample_ratio <= MIN_SAMPLE_SIZE:
+        estimator = SampleEstimator(
+            mcollection,
+            sample_size=min(mcollection.count, 1000),
+            sample_db_name=sample_db,
+            persist=True,
+        )
+    else:
+        estimator = SampleEstimator(
+            mcollection,
+            sample_ratio=sample_ratio,
+            sample_db_name=sample_db,
+            persist=True,
+        )
 
     print(f"\n>> extracted data sample, persisted at {sample_db}.{collection}\n")
 
@@ -114,7 +134,7 @@ def main(
 
             # score index for filtering
             fetch_query = query.index_intersect(candidate)
-            if len(fetch_query.predicates) == 0:
+            if len(fetch_query.filter.keys()) == 0:
                 # index can't be used, no benefit over collection scan
                 benefit = 0
             else:
@@ -165,6 +185,7 @@ def main(
     # -- select indexes greedily
 
     estimator_indexes = []
+    estimator_scores = []
 
     idx_scores = scores.copy()
     for i in range(len(candidates)):
@@ -181,6 +202,7 @@ def main(
         idx_scores.drop(idx, axis="columns", inplace=True)
 
         estimator_indexes.append(idx)
+        estimator_scores.append(topscore[0])
 
         ### update score matrix
         # for each query (row) and all created indexes (columns)
@@ -213,6 +235,39 @@ def main(
     print(f"\n>> recommending {len(estimator_indexes)} index(es)\n")
     for idx in estimator_indexes:
         print("    ", dict(zip(idx, [1] * len(idx))))
+
+    if before_and_after:
+        print(
+            "\n>> WARNING: The --before-and-after option will execute the query workload\n"
+            + f"against your deployment on {uri}.\n"
+            + "The workload runs once without the proposed indexes and once with the indexes.\n"
+            + "Do not use this option on a production system!\n\nDo you wish to continue? [y/N]",
+            end=" ",
+            flush=True,
+        )
+        # raw_input returns the empty string for "enter"
+        yes = {"yes", "y", "ye", ""}
+
+        choice = input().lower()
+        if not choice in yes:
+            sys.exit()
+
+        # run before creating (additional) indexes
+        print("\n>> evaluating workload before creating new indexes\n")
+        before_time = mcollection.execute_workload(workload)
+        print(f"\n    workload took {before_time / 1000.:.2f} sec.")
+
+        # create recommended indexes
+        print("\n>> creating indexes\n")
+        for idx in estimator_indexes:
+            if verbose:
+                print(f"    - {dict(zip(idx, [1] * len(idx)))}")
+            mcollection.create_index(idx)
+
+        # run with newly created indexes
+        print("\n>> evaluating workload after creating new indexes\n")
+        after_time = mcollection.execute_workload(workload)
+        print(f"\n    workload took {after_time / 1000.:.2f} sec to execute.")
 
 
 if __name__ == "__main__":
@@ -254,6 +309,13 @@ if __name__ == "__main__":
         metavar="<db>",
         help="sample database name (default=mindexer_samples)",
     )
+
+    parser.add_argument(
+        "--before-and-after",
+        action="store_true",
+        help="executes and compares workload execution times without/with indexes.",
+    )
+
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
 
     args = parser.parse_args()
