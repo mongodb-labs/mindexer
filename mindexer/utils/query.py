@@ -215,6 +215,9 @@ class Query(object):
                 sub_idx = i
 
         def is_equality_cmp(field):
+            if field not in self.filter:
+                # it's not an equality comparison if the field isn't in the query
+                return False
             if isinstance(self.filter[field], dict):
                 # if none (= not any) of the keys start with $, then it's an equality comparison
                 return not any(key.startswith("$") for key in self.filter[field].keys())
@@ -224,7 +227,7 @@ class Query(object):
 
         if sub_idx != -1:
             # check for preceeding equality predicates
-            if all(is_equality_cmp(key) for key in list(self.filter.keys())[:sub_idx]):
+            if all(is_equality_cmp(key) for key in index[:sub_idx]):
                 return True
 
         return False
