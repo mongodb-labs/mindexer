@@ -60,7 +60,8 @@ def main(
             if "sort" in doc:
                 query.sort = tuple(doc["sort"].keys())
             if "projection" in doc:
-                query.projection = tuple(doc["projection"].keys())
+                # ignore projection keys with 0, specifically {_id: 0}
+                query.projection = tuple([k for k, v in doc["projection"].items() if v == 1])
 
             workload.append(query)
         except Exception as e:

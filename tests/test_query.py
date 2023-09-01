@@ -125,6 +125,17 @@ class TestQuery(unittest.TestCase):
         query.sort = ("Make", "City")
         self.assertTrue(query.can_use_sort(("Unladen Weight", "Make", "City", "State")))
 
+    def test_can_use_sort_linkbench_1(self):
+        query = Query.from_mql(
+            {'id1': 38020, 'link_type': 123456790, 'time': {'$gte': 0, '$lte': 9223372036854775807}, 'visibility': 1}
+        )
+        query.sort = ("time",)
+
+        self.assertTrue(
+            query.can_use_sort(('id1', 'link_type', 'visibility', 'time', 'id2', 'version', 'data'))
+        )
+
+
     def test_can_use_sort_sub_seq_preceeding_not_eq(self):
         query = Query.from_mql(
             {"Unladen Weight": {"$gt": 2000}, "Make": {"$in": ["INFIN", "HYUND"]}}
