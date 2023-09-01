@@ -14,6 +14,7 @@ import argparse
 
 # TODO: Figure out why line 210 causes this warning and how we can prevent it
 np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+pd.options.mode.chained_assignment = None
 
 SYSTEM_PROFILE = "system.profile"
 DEFAULT_SAMPLE_DB = "mindexer_samples"
