@@ -8,7 +8,7 @@ def readme():
 
 setup(
     name="mindexer",
-    version="0.2.0",
+    version="0.3.0",
     description="Experimental Index Recommendation Tool for MongoDB",
     long_description=readme(),
     long_description_content_type="text/markdown",
@@ -19,6 +19,6 @@ setup(
     license="MIT",
     packages=find_packages(),
     scripts=["bin/mindexer"],
-    install_requires=["numpy", "pandas", "bson", "pymongo"],
+    install_requires=["numpy", "pandas", "pymongo"],
     zip_safe=False,
 )
