@@ -201,7 +201,7 @@ class Query(object):
         if self.sort is None:
             # TODO check this: if the query doesn't need a sort, the sort fields sequence
             # is and empty list, and theoretically a prefix of any index.
-            return True
+            return False
 
         # cover case a) and b)
         if self.sort == index[: len(self.sort)]:

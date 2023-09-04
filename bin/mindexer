@@ -14,6 +14,7 @@ import argparse
 
 # TODO: Figure out why line 210 causes this warning and how we can prevent it
 np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+pd.options.mode.chained_assignment = None
 
 SYSTEM_PROFILE = "system.profile"
 DEFAULT_SAMPLE_DB = "mindexer_samples"
@@ -101,6 +102,8 @@ def main(
         for i in range(min(num_preds, MAX_INDEX_FIELDS)):
             for candidate in permutations(query.fields, i + 1):
                 candidates.add(candidate)
+    # We can discard the singular index on "_id", as this is always present in any collection
+    candidates.discard(("_id",))
 
     print(f"\n>> generated {len(candidates)} candidate indexes\n")
     if verbose:
@@ -191,13 +194,13 @@ def main(
     idx_scores = scores.copy()
     for i in range(len(candidates)):
 
-        # if nothing can be improved, we're done
-        if (idx_scores <= 0).values.all():
-            break
-
         # --- sum scores of all queries
         topscore = idx_scores.sum(axis=0).sort_values(ascending=False)
         idx = topscore.index[0]
+
+        # if nothing can be improved, we're done
+        if topscore.values[0] <= 0:
+            break
 
         # remove index from the score table
         idx_scores.drop(idx, axis="columns", inplace=True)
