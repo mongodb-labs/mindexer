@@ -11,9 +11,10 @@ import numpy as np
 import sys
 import time
 import argparse
+import warnings
 
 # TODO: Figure out why line 210 causes this warning and how we can prevent it
-np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 pd.options.mode.chained_assignment = None
 
 SYSTEM_PROFILE = "system.profile"
@@ -62,7 +63,9 @@ def main(
                 query.sort = tuple(doc["sort"].keys())
             if "projection" in doc:
                 # ignore projection keys with 0, specifically {_id: 0}
-                query.projection = tuple([k for k, v in doc["projection"].items() if v == 1])
+                query.projection = tuple(
+                    [k for k, v in doc["projection"].items() if v == 1]
+                )
 
             workload.append(query)
         except Exception as e:
