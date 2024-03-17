@@ -8,7 +8,7 @@ def readme():
 
 setup(
     name="mindexer",
-    version="0.3.1",
+    version="0.3.2",
     description="Experimental Index Recommendation Tool for MongoDB",
     long_description=readme(),
     long_description_content_type="text/markdown",
