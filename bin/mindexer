@@ -25,6 +25,7 @@ MAX_INDEX_FIELDS = 3
 IXSCAN_COST = 0.5
 FETCH_COST = 10
 SORT_COST = 10
+COLLSCAN_COST = 1.0
 
 
 def main(
@@ -164,7 +165,7 @@ def main(
 
                 # benefit of the index over a collection scan (assuming cost of
                 # collscan = 1.0 relative to other costs)
-                benefit = estimator.get_cardinality() * 1.0 - est * cost
+                benefit = estimator.get_cardinality() * COLLSCAN_COST - est * cost
 
             # add additional benefit points if index can be used for sorting
             if query.can_use_sort(candidate):
