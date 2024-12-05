@@ -161,6 +161,25 @@ class Query(object):
 
         return query
 
+    def index_number_key_qurey(self, index):
+        """
+            return the query that can be used to determine the number of 
+            index key needs to be examined.
+        """
+        query = Query()
+
+        for field in index:
+            if field in self.filter:
+                if isinstance(self.filter[field], dict):
+                    query.add_predicate({field: self.filter[field]})
+                    break
+                else:
+                    query.add_predicate({field: self.filter[field]})
+            else:
+                break
+
+        return query
+
     def is_subset(self, index):
         """returns true if all predicate fields are included in the index.
         This is necessary, but not sufficient to be a covered by the index.
