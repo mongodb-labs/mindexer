@@ -161,7 +161,7 @@ class Query(object):
 
         return query
 
-    def index_number_key_qurey(self, index):
+    def index_number_key_query(self, index):
         """
             return the query that can be used to determine the number of 
             index key needs to be examined.
