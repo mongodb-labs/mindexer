@@ -97,9 +97,9 @@ python -m unittest discover ./tests
 
 ## Contributors
 
-Two students from Sydney University have dedicated their Honour's projects to mindexer:
+Two students from the [University of Sydney](https://www.sydney.edu.au/) have dedicated their Honours projects to `mindexer`:
 
 - Avinash Thirukumaran ([avinashtj03](https://github.com/avinashtj03)): [Evaluating an Index Recommender on a Real Workload](https://drive.google.com/file/d/1oTH0D90WRXIR5plVJWnDnMvinvgOzzDi/view?usp=drive_link)
 - Yan Rong ([YanRong-au](https://github.com/YanRong-au)): [Improving Index Recommendation for MongoDB](https://github.com/YanRong-au/mindexer/blob/main/THESIS_YAN_RONG.pdf)
 
-Thanks for your contributions!
+Thank you for your contributions!
