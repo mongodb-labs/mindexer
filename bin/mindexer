@@ -22,10 +22,10 @@ DEFAULT_SAMPLE_DB = "mindexer_samples"
 DEFAULT_SAMPLE_RATIO = 0.001
 MIN_SAMPLE_SIZE = 1000
 MAX_INDEX_FIELDS = 3
-IXSCAN_COST = 0.5
-FETCH_COST = 10
+IXSCAN_COST = 0.4
+INDEX_FIELD_COST = 0.05
+FETCH_COST = 9.5
 SORT_COST = 10
-COLLSCAN_COST = 1.0
 
 
 def main(
@@ -134,10 +134,13 @@ def main(
         0,
         index=range(len(workload)),
         columns=list(candidates),
+        dtype="float"
     )
 
     for nq, query in enumerate(workload):
         print(f"    query #{nq:<2}: {query}")
+
+
         for nc, candidate in enumerate(candidates):
 
             # score index for filtering
@@ -146,14 +149,12 @@ def main(
                 # index can't be used, no benefit over collection scan
                 benefit = 0
             else:
-                # different costs per unit of work depending if the query is covered or not
-                if query.is_covered(candidate):
-                    cost = IXSCAN_COST
-                else:
-                    cost = FETCH_COST
-
-                # estimate for number of "work units"
+                # estimate for number of documents needs to be fetched
                 est = get_estimate(fetch_query)
+
+                # estimate number of index key examined 
+                index_key_scanned = query.index_number_key_query(candidate)
+                index_key_scanned_est = get_estimate(index_key_scanned)
 
                 # if the query has a limit, and all fields of the filter are in the
                 # index, then we can cap the upper bound of the estimate at limit.
@@ -162,10 +163,41 @@ def main(
                 # See https://math.stackexchange.com/questions/2595408/hypergeometric-distribution-expected-number-of-draws-until-k-successes-are-dra
                 if query.limit is not None and query.is_subset(candidate):
                     est = min(query.limit, est)
+                    index_key_scanned_est = min(query.limit, index_key_scanned_est)
 
-                # benefit of the index over a collection scan (assuming cost of
-                # collscan = 1.0 relative to other costs)
-                benefit = estimator.get_cardinality() * COLLSCAN_COST - est * cost
+                # Calculating the index lookup cost for retrieving desired documents based on the candidate index.
+                # This cost accounts for the overhead of scanning the index to find matching keys.
+                # Note: This calculation only covers the index lookup cost. If the query is not fully covered 
+                # by the index (e.g., if some fields required by the query are not part of the index), 
+                # additional fetch operations will be required to retrieve the full documents. These fetch 
+                # operations incur additional costs that are not included here.
+                #
+                # The index lookup cost is calculated as follows:
+                # 
+                # 1. (IXSCAN_COST + (len(candidate) - 1) * INDEX_FIELD_COST):
+                #    - This represents the **cost per index key or entry**, considering both the base scan cost 
+                #      (IXSCAN_COST) and the additional cost associated with the size of the index.
+                #    - The base cost (IXSCAN_COST) reflects the overhead of scanning each index key.
+                #    - The additional cost, `(len(candidate) - 1) * INDEX_FIELD_COST`, reflects the higher storage 
+                #      and processing cost for larger indexes (with more fields). The first field does not incur
+                #      additional cost, so the adjustment `(len(candidate) - 1)` is used.
+                #
+                # 2. index_key_scanned_est:
+                #    - This estimates the total number of index keys that need to be scanned for the query.
+                #    - The cost per index key (calculated above) is multiplied by this value to compute the 
+                #      total index lookup cost.
+                #
+                # The total index lookup cost combines these two components to reflect the overhead of using the 
+                # index for the query.
+                index_cost = (IXSCAN_COST + (len(candidate) - 1) * INDEX_FIELD_COST) * index_key_scanned_est
+                
+                # Add fetch cost if the query is not fully covered by the candidate index.
+                # FETCH_COST represents the cost of fetching a single document from the collection.
+                # The total fetch cost is calculated as FETCH_COST multiplied by the estimated number
+                # of documents (`est`) that need to be retrieved.
+                if not query.is_covered(candidate):
+                    index_cost += FETCH_COST * est
+                benefit = estimator.get_cardinality() * 1.0 - index_cost
 
             # add additional benefit points if index can be used for sorting
             if query.can_use_sort(candidate):
@@ -174,6 +206,7 @@ def main(
                 benefit += est * np.log2(est) * SORT_COST
 
             scores.iat[nq, nc] = benefit
+
 
     score_duration_ms = (time.time() - score_time) * 1000
     if verbose:

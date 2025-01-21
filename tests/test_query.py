@@ -256,6 +256,42 @@ class TestQuery(unittest.TestCase):
         self.assertRaisesRegex(
             NotImplementedError, "queries with \$or not supported", fn
         )
+    
+    # test case for index_number_key_query(self, index)
+    def test_index_number_key_query_case_1(self):
+        """Test ER index."""
+        query = Query.from_mql({"mark": {"$gte": 50}, "age": {"$gte": 18}, "major": "CS"})
+        index = ("major", "mark")
+        result_query = query.index_number_key_query(index)
+        self.assertEqual(result_query.filter, {"major": "CS", "mark": {"$gte": 50}})
+
+    def test_index_number_key_query_case_2(self):
+        """Test ER index."""
+        query = Query.from_mql({"mark": {"$gte": 50}, "age": {"$gte": 18}, "major": "CS"})
+        index = ("major", "age")
+        result_query = query.index_number_key_query(index)
+        self.assertEqual(result_query.filter, {"major": "CS", "age": {"$gte": 18}})
+
+    def test_index_number_key_query_case_3(self):
+        """Test RE index."""
+        query = Query.from_mql({"mark": {"$gte": 50}, "age": {"$gte": 18}, "major": "CS"})
+        index = ("age", "major")
+        result_query = query.index_number_key_query(index)
+        self.assertEqual(result_query.filter, {"age": {"$gte": 18}})
+
+    def test_index_number_key_query_case_4(self):
+        """Test RR index."""
+        query = Query.from_mql({"mark": {"$gte": 50}, "age": {"$gte": 18}, "major": "CS"})
+        index = ("age", "mark")
+        result_query = query.index_number_key_query(index)
+        self.assertEqual(result_query.filter, {"age": {"$gte": 18}})
+
+    def test_index_number_key_query_case_5(self):
+        """Test EE index'."""
+        query = Query.from_mql({"name": "John", "major": "CS"})
+        index = ("name", "major")
+        result_query = query.index_number_key_query(index)
+        self.assertEqual(result_query.filter, {"name": "John", "major": "CS"})
 
 
 if __name__ == "__main__":
